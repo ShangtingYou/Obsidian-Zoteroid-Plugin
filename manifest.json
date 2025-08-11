@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-zoteroid-plugin",
+	"name": "Zoteroid",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Manage literature in Obsidian.",
+	"author": "Shangting You",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}
