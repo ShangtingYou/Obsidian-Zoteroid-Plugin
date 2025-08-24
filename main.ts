@@ -69,8 +69,6 @@ class DoiModal extends Modal {
         return;
       }
       const doi = doiMatch[1];                           // Pure DOI format
-      
-
       // call handler
       await this.onSearch(doi);
       this.close();
@@ -84,6 +82,31 @@ class DoiModal extends Modal {
 
     // autofocus
     setTimeout(() => input.focus(), 50);
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+}
+
+class OverviewModal extends Modal {
+  private onGenerate: () => Promise<void>;
+  constructor(app: App, onGenerate: () => Promise<void>) {
+    super(app);
+    this.onGenerate = onGenerate;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl('h3', { text: 'Generate (overwrite) literature overview?' });
+
+    const btn = contentEl.createEl('button', { text: 'Generate' }) as HTMLButtonElement;
+    btn.onclick = async () => {
+      await this.onGenerate();
+      this.close();
+    };
+    
   }
 
   onClose() {
@@ -109,7 +132,10 @@ export default class LiteraturePlugin extends Plugin {
     });
 
     this.addRibbonIcon('brain', 'Generate literature overview page', () => {
-      this.generateOverviewPage();
+    //  this.generateOverviewPage();
+      new OverviewModal(this.app, async () => {
+        await this.generateOverviewPage();
+      }).open();
     });
 
     // test, will be deleted
@@ -129,28 +155,79 @@ export default class LiteraturePlugin extends Plugin {
   async generateOverviewPage()
   {
     // Check/create overview page
+    const overviewContent = [
+      `---\n`,
+      `type: ZoteroidOverview`,
+      `---\n\n\n`,
+      `### Filtered Paper`,
+      `\`\`\`dataview`,
+      `TABLE Journal, Title, Year, Keyword`,
+      `FROM \"${this.settings.literatureRoot}\"`,
+      `WHERE type = \"ZoteroidRecord\"`,
+      ``,
+      `// change here to filter by keyword, journal, year, etc.`,
+      `WHERE (contains(Keyword, \"#keyword1\") or contains(Keyword, \"")) and contains(journal, "") and (year > 1949)`,
+      ``,
+      `// change here to sort by date added or publish year, in ASC or DESC order`,
+      `// SORT Year DESC`,
+      `SORT date DESC`,
+      `\`\`\``,
+      ``,
+      `### All Keywords`,
+      `\`\`\`dataview`,
+      `LIST WITHOUT ID Keyword`,
+      `FROM \"${this.settings.literatureRoot}\"`,
+      `WHERE Keyword`,
+      `FLATTEN Keyword`,
+      'GROUP BY Keyword',
+      `SORT Keyword ASC`,
+      `\`\`\``,
+      ``,
+      `### All Journals`,
+      `\`\`\`dataview`,
+      `LIST WITHOUT ID Journal`,
+      `FROM \"${this.settings.literatureRoot}\"`,
+      `WHERE Journal`,
+      `FLATTEN Journal`,
+      'GROUP BY Journal',
+      `SORT Journal ASC`,
+      `\`\`\``,
+      ``,
+      `### All Labs`,
+      `\`\`\`dataview`,
+      `LIST WITHOUT ID Lab`,
+      `FROM \"${this.settings.literatureRoot}\"`,
+      `WHERE Lab`,
+      `FLATTEN Lab`,
+      'GROUP BY Lab',
+      `SORT Lab ASC`,
+      `\`\`\``,
+      `\n\n\nTo correctly display this page, you need to install Dataview plug-in.`,
+    ];
+
     if (this.settings.literatureOverviewPagePath) {
 				const overviewPath = normalizePath(this.settings.literatureOverviewPagePath);
-				if (!this.app.vault.getAbstractFileByPath(overviewPath)) {
-          const overviewContent = [
-            `---\n`,
-            `type: ZoteroidOverview`,
-            `---\n\n\n`,
-            `### Filter by keywords\n\n\n`,
-            `\`\`\`dataview`,
-            `table Journal, Title, Year, Keyword`,
-            `from \"${this.settings.literatureRoot}\"`,
-            `where type = \"ZoteroidRecord\" and (contains(Keyword, \"#keyword1\") or contains(Keyword, \"#keyword2\"))`,
-            `sort Year DESC`,
-            `\`\`\``,  
-            `\n\n\nTo correctly display this page, you need to install Dataview plug-in, and edit the code according to its grammar.\n`,         
-          ];
+        const file = this.app.vault.getAbstractFileByPath(overviewPath);
+
+        if(file instanceof TFile){
+            await this.app.vault.modify(
+						file,
+						overviewContent.join('\n')
+					).catch(() => {});
+					new Notice("Overwritten literature overview page");
+        }
+
+				else {       
 					await this.app.vault.create(
 						overviewPath,
 						overviewContent.join('\n')
 					).catch(() => {});
 					new Notice("Created literature overview page");
 				}
+
+      if(file instanceof TFile)
+        this.app.workspace.getLeaf(false).openFile(file);
+  
 			}
   }
   async handleDOI(rawDoi: string) {
@@ -284,7 +361,7 @@ export default class LiteraturePlugin extends Plugin {
       `### Journal\n(Journal:: ${journal || ''})\n`,
       `### Year\n(Year:: ${year})\n`,
       `### DOI\n(DOI:: ${doiUrl})\n`,
-      `### Group\n(Group:: #group1)\n`,
+      `### Lab\n(Lab:: #nobody)\n`,
       `### Keyword\n(Keyword:: #keyword1)\n(Keyword:: #keyword2)\n`,
       `### Authors\n${authorNames}`,
       `### Abstract\n${abstractRaw}\n`,
